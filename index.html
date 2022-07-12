@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rockola</title>
+    <link rel="shortcut icon" href="#">
+    <link href="assets/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body class="vh-100" style="background-color: azure;">
+    <div class="d-flex flex-column h-100">
+        <h1 class="my-5 text-primary text-center">Rockola</h1>
+
+        <div class="container mx-md-auto flex-grow-1">
+            <div class="row h-100">
+                <div class="col-md-6 text-center fs-4">
+                    <img id="img-album" class="d-none d-md-inline mb-3 flex-grow-1" src="assets/img/disco.gif" alt="Imagen de reproducción" style="height: 70%;">
+
+                    <div class="col d-flex flex-row">
+                        <label id="lbl-titulo" class="d-inline flex-grow-1">...</label>
+                        <label id="lbl-album" class="d-none d-md-inline flex-grow-1">...</label>
+                    </div>
+
+                    <div class="input-group mb-3">
+                        <label id="lbl-tiempo-actual" class="input-group-text">--:--</label>
+                        <div class="mx-1 flex-grow-1">
+                            <div class="progress">
+                                <div id="div-progreso" class="progress-bar" role="progressbar"></div>
+                            </div>
+                        </div>
+                        <label id="lbl-tiempo-total" class="input-group-text">--:--</label>
+                    </div>
+
+                    <div class="d-flex flex-row">
+                        <button id="btn-moneda" class="btn btn-secondary">Insertar Moneda</button>
+                        <label id="lbl-creditos" class="ms-4">Créditos: 0</label>
+                    </div>
+                </div>
+                <div id="div-canciones" class="col-md-6 d-flex flex-column h-100 mt-5 mt-md-auto fs-5 text-center">
+                    <h3>Cola de Reproducción</h3>
+                    <div id="div-cola" class="flex-grow-1 text-start" style="overflow-y: scroll;"></div>
+
+                    <h3>Canciones disponibles</h3>
+                    <div id="div-disponibles" class="flex-grow-1 text-start" style="overflow-y: scroll;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <audio id="audio">
+        <source src="#" type="audio/mp3">
+        Tu navegador no soporta audio HTML5
+    </audio>
+
+    <template id="tmp-cancion">
+        <div class="d-flex flex-column border px-3 py-2">
+            <label class='col-12'>Titulo de la Cancion</label>
+            <div class="col d-flex flex-row fs-6">
+                <label class=' flex-grow-1'>Album</label>
+                <label class=' flex-grow-1'>Arista</label><br>
+            </div>
+        </div>
+    </template>
+
+    <script>
+        class Cancion {
+            static idInterval;
+
+            titulo;
+            album;
+            artista;
+            urlAudio;
+            urlImagen;
+
+            static reproducirSiguiente() {
+                if (!cola.length) { //Si no hay más canciones
+                    clearInterval(Cancion.idInterval);
+
+                    //Reiniciar las vistas
+                    document.getElementById("div-progreso").style.width = "0%";
+                    imgAlbum.src = "assets/img/disco.gif";
+                    document.getElementById("lbl-titulo").innerHTML = "...";
+                    document.getElementById("lbl-album").innerHTML = "...";
+                    document.getElementById("lbl-tiempo-total").innerHTML = "--:--";
+                    document.getElementById("lbl-tiempo-actual").innerHTML = "--:--";
+
+                    return; //No hacer nada
+                } else if (!audio.paused) { //Si el audio ya está reproduciéndose
+                    return; //No hacer nada
+                }
+
+                audio.src = cola[0].urlAudio; //Actualizar la fuente de audio
+                audio.play(); //Reproducir el audio
+
+                imgAlbum.src = cola[0].urlImagen;
+                document.getElementById("lbl-titulo").innerHTML = cola[0].titulo;
+                document.getElementById("lbl-album").innerHTML = cola[0].album;
+
+                cola.shift(); //Eliminar el audio de la cola
+
+                clearInterval(Cancion.idInterval);
+                Cancion.idInterval = setInterval(() => { //Actualizar el tiempo transcurrido cada segundo
+                    //Calcular los minutos y segundos
+                    let actual = parseInt(audio.currentTime);
+                    let mins = parseInt(actual / 60);
+                    let secs = (actual % 60);
+                    document.getElementById("lbl-tiempo-actual").innerHTML = ((mins < 10) ? "0" + mins : mins) + ":" + ((secs < 10) ? "0" + secs : secs); //Actualizar el tiempo transcurrido del audio
+                    document.getElementById("div-progreso").style.width = (actual / parseInt(audio.duration) * 100) + "%"; //Actualizar la barra de progreso
+                }, 1000);
+
+                let idInit = setInterval(() => { //Esperar a que se inicialice el audio
+                    if (isNaN(audio.duration)) { //Si aún no se ha inicializado
+                        return; //No hacer nada
+                    }
+
+                    //Calcular los minutos y segundos
+                    let total = parseInt(audio.duration);
+                    let mins = parseInt(total / 60);
+                    let secs = (total % 60);
+                    document.getElementById("lbl-tiempo-total").innerHTML = ((mins < 10) ? "0" + mins : mins) + ":" + ((secs < 10) ? "0" + secs : secs); //Actualizar la duración del audio
+
+                    clearInterval(idInit);
+                }, 50);
+
+                document.getElementById("lbl-tiempo-actual").innerHTML = "00:00"; //Mostrar el inicio del audio
+            }
+
+            /** 
+             * Insertar una canción a la lista deseada
+             * 
+             * @param {string} lista La lista a la que se va a agregar esta canción. Debe ser uno de 'cola' o 'disp'
+             * @param {Cancion} cancion Canción que se va a agregar
+             * @param {function} accion Acción a realizar cuando se da click en el div
+             * @returns {boolean} true si la canción se muestra en pantalla, false si no
+             */
+            static mostrarCancion(lista, cancion, accion) {
+                let div = document.importNode(tmpCancion.content.querySelector("div"), true); //Obtener y clonar el div de la canción
+                let lbls = div.querySelectorAll("label"); //Obtener todos los elementos label dentro del div
+
+                //Agregar el evento al dar click
+                div.addEventListener('click', accion);
+
+                //Modificar los datos de la canción
+                lbls[0].innerHTML = cancion.titulo;
+                lbls[1].innerHTML = cancion.album;
+                lbls[2].innerHTML = cancion.artista;
+
+                switch (lista) {
+                    case 'cola':
+                        divCola.insertAdjacentElement('beforeend', div); //Insertar la vista de la nueva canción
+                        break;
+                    case 'disp':
+                        divDisponibles.insertAdjacentElement('beforeend', div); //Insertar la vista de la nueva canción
+                        break;
+                    default: //Si no es un tipo válido
+                        return false; //Indicar un error
+                }
+
+                return true;
+            }
+
+            constructor(titulo, album, artista, urlAudio, urlImagen) {
+                this.titulo = titulo;
+                this.album = album;
+                this.artista = artista;
+                this.urlAudio = "assets/audio/" + urlAudio;
+                this.urlImagen = "assets/img/" + urlImagen;
+            }
+
+        }
+    </script>
+
+    <script>
+        var divCola = document.getElementById("div-cola");
+        var divDisponibles = document.getElementById("div-disponibles");
+        var divCanciones = document.getElementById("div-canciones");
+        var btnMoneda = document.getElementById("btn-moneda");
+        var lblCreditos = document.getElementById("lbl-creditos");
+        var imgAlbum = document.getElementById("img-album");
+        var tmpCancion = document.getElementById("tmp-cancion");
+        var audio = document.getElementById("audio");
+
+        //Inicializar la altura de las vistas
+        divCola.style.maxHeight = divCola.offsetHeight + "px";
+        divDisponibles.style.maxHeight = divDisponibles.offsetHeight + "px";
+        imgAlbum.style.maxHeight = imgAlbum.offsetHeight + "px";
+
+        let creditos = 0;
+        let disponibles = [
+            new Cancion("Bridge Burning", "Wasting Light", "Foo Fighters", "Foo Fighters - Bridge Burning.mp3", "wasting-light.png"),
+            new Cancion("White Limo", "Wasting Light", "Foo Fighters", "Foo Fighters - White Limo.mp3", "wasting-light.png"),
+            new Cancion("Didn't Even Try", "On The Turn", "Kerbdog", "Kerbdog - Didn't Even Try.mp3", "on-the-turn.png"),
+            new Cancion("Elephants", "Them Crooked Vultures", "Them Crooked Vultures", "Them Crooked Vultures - Elephants.mp3", "them-crooked-vultures.png"),
+            new Cancion("All My Loving", "With the Beatles", "The Beatles", "The Beatles - All My Loving.mp3", "with-the-beatles.png"),
+        ];
+        let cola = [];
+
+        for (let i = 0; i < disponibles.length; i++) { //Mostrar todas las canciones disponibles
+            let cancion = disponibles[i];
+
+            Cancion.mostrarCancion("disp", cancion, () => {
+                if (creditos) { //Si aún tiene créditos
+                    Cancion.mostrarCancion("cola", cancion); //Mostrar la canción en pantalla
+                    cola.agregar(cancion); //Agregar la canción a la cola
+                    creditos--; //Disminuir un crédito
+                    lblCreditos.innerHTML = "Créditos: " + creditos; //Actualizar la cantidad de créditos en pantalla
+                } else {
+                    alert("No te quedan créditos");
+                }
+            });
+        }
+
+        btnMoneda.addEventListener("click", () => {
+            creditos += 3; //Aumentar la cantidad de créditos
+
+            lblCreditos.innerHTML = "Créditos: " + creditos; //Actualizar la cantidad de créditos en pantalla
+        });
+
+        cola.agregar = (item) => {
+            cola.push(item); //Agregar el audio a la cola
+
+            Cancion.reproducirSiguiente(); //Si es el primer audio, se comenzará a reproducir
+        };
+
+        audio.addEventListener('ended', () => { //Sólo debería ejecutarse cuando termina una canción
+            audio.currentTime = 0; //Reiniciar el tiempo
+
+            Cancion.reproducirSiguiente(); //Reproducir el siguiente audio
+
+            divCola.children[0].remove(); //Eliminar la vista de la cola de reproducción
+        });
+    </script>
+
+    <!-- No sé exactamente para qué funciona -->
+    <script src="assets/bootstrap/js/bootstrap.min.js"></script>
+</body>
+
+</html>
